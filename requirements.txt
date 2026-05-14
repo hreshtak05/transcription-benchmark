@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+google-generativeai
+jiwer
+httpx
+python-multipart
+sse-starlette
+mutagen
+aiofiles

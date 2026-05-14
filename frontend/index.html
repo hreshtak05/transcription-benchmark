@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Transcription Benchmark</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Armenian:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', 'Noto Sans Armenian', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    .w-ok  { color: #94a3b8; }
+    .w-del { background: #7f1d1d33; color: #fca5a5; text-decoration: line-through; padding: 1px 3px; border-radius: 3px; }
+    .w-sub { background: #78350f33; color: #fcd34d; padding: 1px 3px; border-radius: 3px; cursor: help; border-bottom: 1px dashed #fcd34d; }
+    .w-ins { background: #14532d33; color: #86efac; padding: 1px 3px; border-radius: 3px; }
+
+    .drop-active { border-color: #6366f1 !important; background: #1e1b4b22; }
+    [x-cloak] { display: none !important; }
+
+    .spinner {
+      border: 2px solid #334155;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      width: 16px; height: 16px;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .result-card { animation: slideIn 0.3s ease-out; }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surface: '#0f172a',
+            card: '#1e293b',
+            border: '#334155',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-surface text-slate-200 min-h-screen" x-data="app()" x-cloak>
+
+  <!-- Header -->
+  <header class="border-b border-border px-6 py-4 flex items-center justify-between">
+    <div>
+      <h1 class="text-lg font-bold text-white tracking-tight">Transcription Benchmark</h1>
+      <p class="text-xs text-slate-500 mt-0.5">Compare AI models against your reference · Armenian · Russian · English</p>
+    </div>
+    <div x-show="Object.keys(results).length > 0" class="text-xs text-slate-500">
+      <span x-text="Object.keys(results).length"></span> model(s) tested
+    </div>
+  </header>
+
+  <div class="max-w-screen-xl mx-auto px-6 py-8 flex gap-8">
+
+    <!-- ── LEFT PANEL ── -->
+    <aside class="w-80 shrink-0 space-y-5">
+
+      <!-- Audio upload -->
+      <div class="bg-card rounded-2xl border border-border p-5">
+        <h2 class="text-sm font-semibold text-slate-300 mb-3">Audio File</h2>
+        <div
+          class="border-2 border-dashed border-border rounded-xl p-6 text-center cursor-pointer hover:border-indigo-500 transition-colors duration-200"
+          :class="{ 'drop-active': dragging }"
+          @dragover.prevent="dragging = true"
+          @dragleave="dragging = false"
+          @drop.prevent="handleDrop($event)"
+          @click="$refs.audioInput.click()"
+        >
+          <template x-if="!audioFile">
+            <div>
+              <svg class="mx-auto mb-3 w-8 h-8 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+              </svg>
+              <p class="text-sm text-slate-400">Drop audio or click to browse</p>
+              <p class="text-xs text-slate-600 mt-1">MP3 · WAV · M4A · OGG · up to 200MB</p>
+            </div>
+          </template>
+          <template x-if="audioFile">
+            <div>
+              <svg class="mx-auto mb-2 w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <p class="text-sm font-medium text-slate-200 truncate max-w-full" x-text="audioFile.name"></p>
+              <p class="text-xs text-slate-500 mt-0.5" x-text="formatSize(audioFile.size)"></p>
+              <button class="mt-2 text-xs text-slate-600 hover:text-red-400 transition-colors" @click.stop="audioFile = null">Remove</button>
+            </div>
+          </template>
+        </div>
+        <input type="file" x-ref="audioInput" class="hidden" accept="audio/*" @change="handleFileInput($event)" />
+      </div>
+
+      <!-- Reference transcription -->
+      <div class="bg-card rounded-2xl border border-border p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-slate-300">Reference Transcription</h2>
+          <span class="text-xs text-slate-600" x-text="wordCount(reference) + ' words'"></span>
+        </div>
+        <textarea
+          x-model="reference"
+          class="w-full h-44 bg-slate-900 rounded-lg p-3 text-sm text-slate-300 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder-slate-600"
+          placeholder="Paste your accurate human transcription here…"
+        ></textarea>
+      </div>
+
+      <!-- Model selection -->
+      <div class="bg-card rounded-2xl border border-border p-5">
+        <h2 class="text-sm font-semibold text-slate-300 mb-3">Select Models</h2>
+        <div class="space-y-1">
+          <template x-for="m in models" :key="m.id">
+            <label class="flex items-center gap-3 p-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors group">
+              <input
+                type="checkbox"
+                :value="m.id"
+                x-model="selectedModels"
+                class="rounded border-border bg-slate-900 accent-indigo-500 w-4 h-4 cursor-pointer"
+              />
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-slate-200" x-text="m.name"></p>
+                <p class="text-xs text-slate-500 truncate" x-text="m.desc"></p>
+              </div>
+              <div x-show="running && selectedModels.includes(m.id) && !results[m.id]">
+                <span class="spinner"></span>
+              </div>
+              <div x-show="results[m.id]" class="text-xs font-semibold" :class="accuracyColor(results[m.id]?.comparison?.accuracy)">
+                <span x-text="results[m.id]?.comparison?.accuracy + '%'"></span>
+              </div>
+            </label>
+          </template>
+        </div>
+      </div>
+
+      <!-- Run button -->
+      <button
+        @click="run()"
+        :disabled="!canRun || running"
+        class="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed font-semibold text-sm transition-colors duration-150 flex items-center justify-center gap-2"
+      >
+        <span x-show="!running">Run Benchmark</span>
+        <template x-if="running">
+          <span class="flex items-center gap-2">
+            <span class="spinner" style="border-top-color: white;"></span>
+            <span x-text="statusMessage || 'Running…'"></span>
+          </span>
+        </template>
+      </button>
+
+      <!-- Error messages -->
+      <template x-if="errors.length > 0">
+        <div class="space-y-2">
+          <template x-for="err in errors" :key="err">
+            <div class="bg-red-950 border border-red-800 rounded-lg p-3 text-xs text-red-300" x-text="err"></div>
+          </template>
+        </div>
+      </template>
+
+    </aside>
+
+    <!-- ── RIGHT PANEL ── -->
+    <main class="flex-1 min-w-0 space-y-6">
+
+      <!-- Empty state -->
+      <template x-if="Object.keys(results).length === 0 && !running">
+        <div class="flex flex-col items-center justify-center h-80 text-center">
+          <svg class="w-16 h-16 text-slate-800 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          <p class="text-slate-500 text-sm">Upload audio, add your reference, select models, and hit Run.</p>
+        </div>
+      </template>
+
+      <!-- Summary table -->
+      <template x-if="Object.keys(results).length > 0">
+        <div class="bg-card rounded-2xl border border-border overflow-hidden result-card">
+          <div class="px-5 py-4 border-b border-border flex items-center justify-between">
+            <h2 class="font-semibold text-sm text-slate-200">Summary</h2>
+            <button @click="exportCSV()" class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Export CSV</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-border text-xs text-slate-500 uppercase tracking-wide">
+                  <th class="text-left px-5 py-3">Model</th>
+                  <th class="text-right px-5 py-3">Accuracy</th>
+                  <th class="text-right px-5 py-3">WER</th>
+                  <th class="text-right px-5 py-3">CER</th>
+                  <th class="text-right px-5 py-3">Latency</th>
+                  <th class="text-right px-5 py-3">Est. Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="[name, data] in sortedResults()" :key="name">
+                  <tr class="border-b border-border last:border-0 hover:bg-slate-800/30 transition-colors">
+                    <td class="px-5 py-3 font-medium text-slate-200" x-text="name"></td>
+                    <td class="px-5 py-3 text-right font-bold" :class="accuracyColor(data.comparison.accuracy)">
+                      <span x-text="data.comparison.accuracy + '%'"></span>
+                    </td>
+                    <td class="px-5 py-3 text-right text-slate-400" x-text="data.comparison.wer + '%'"></td>
+                    <td class="px-5 py-3 text-right text-slate-400" x-text="data.comparison.cer + '%'"></td>
+                    <td class="px-5 py-3 text-right text-slate-400" x-text="data.latency + 's'"></td>
+                    <td class="px-5 py-3 text-right text-slate-400">
+                      <span x-text="data.cost > 0 ? '$' + data.cost : '—'"></span>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+
+      <!-- Per-model result cards -->
+      <template x-for="[name, data] in Object.entries(results)" :key="name">
+        <div class="bg-card rounded-2xl border border-border overflow-hidden result-card">
+          <!-- Card header -->
+          <div class="px-5 py-4 border-b border-border flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <h3 class="font-semibold text-slate-200" x-text="name"></h3>
+              <span class="text-xs text-slate-500" x-text="data.model"></span>
+            </div>
+            <div class="flex items-center gap-4">
+              <div class="text-xs text-slate-500" x-text="data.latency + 's'"></div>
+              <div class="text-sm font-bold" :class="accuracyColor(data.comparison.accuracy)" x-text="data.comparison.accuracy + '% accuracy'"></div>
+            </div>
+          </div>
+
+          <div class="p-5 space-y-5">
+            <!-- Stats row -->
+            <div class="grid grid-cols-4 gap-3">
+              <div class="bg-slate-900 rounded-xl p-3 text-center">
+                <div class="text-lg font-bold" :class="accuracyColor(data.comparison.accuracy)" x-text="data.comparison.accuracy + '%'"></div>
+                <div class="text-xs text-slate-500 mt-0.5">Accuracy</div>
+              </div>
+              <div class="bg-slate-900 rounded-xl p-3 text-center">
+                <div class="text-lg font-bold text-slate-300" x-text="data.comparison.wer + '%'"></div>
+                <div class="text-xs text-slate-500 mt-0.5">WER</div>
+              </div>
+              <div class="bg-slate-900 rounded-xl p-3 text-center">
+                <div class="text-lg font-bold text-slate-300" x-text="data.latency + 's'"></div>
+                <div class="text-xs text-slate-500 mt-0.5">Latency</div>
+              </div>
+              <div class="bg-slate-900 rounded-xl p-3 text-center">
+                <div class="text-lg font-bold text-slate-300" x-text="data.cost > 0 ? '$' + data.cost : '—'"></div>
+                <div class="text-xs text-slate-500 mt-0.5">Cost</div>
+              </div>
+            </div>
+
+            <!-- Transcription output -->
+            <div>
+              <h4 class="text-xs font-medium text-slate-500 uppercase tracking-widest mb-2">Model Output</h4>
+              <div class="bg-slate-900 rounded-xl p-4 text-sm text-slate-300 leading-relaxed mono" x-text="data.text || '(empty)'"></div>
+            </div>
+
+            <!-- Diff view -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="text-xs font-medium text-slate-500 uppercase tracking-widest">Word Diff vs Reference</h4>
+                <div class="flex items-center gap-3 text-xs text-slate-600">
+                  <span><span class="inline-block w-2 h-2 rounded-sm bg-red-900 mr-1"></span>Missed</span>
+                  <span><span class="inline-block w-2 h-2 rounded-sm bg-yellow-900 mr-1"></span>Wrong (hover)</span>
+                  <span><span class="inline-block w-2 h-2 rounded-sm bg-green-900 mr-1"></span>Added</span>
+                </div>
+              </div>
+              <div class="bg-slate-900 rounded-xl p-4 text-sm leading-7 mono" x-html="data.comparison.diff_html"></div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Qualitative analysis -->
+      <template x-if="analysis && !analysis.error && !analysis.raw">
+        <div class="bg-card rounded-2xl border border-border overflow-hidden result-card">
+          <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+            <h2 class="font-semibold text-sm text-slate-200">Qualitative Analysis</h2>
+            <span class="text-xs text-indigo-400 bg-indigo-950 border border-indigo-800 px-2 py-0.5 rounded-full">Gemini Judge</span>
+          </div>
+          <div class="p-5 grid gap-5">
+            <template x-for="[name, eval_] in Object.entries(analysis)" :key="name">
+              <div class="border border-border rounded-xl p-4 space-y-3">
+                <h3 class="font-semibold text-slate-200" x-text="name"></h3>
+                <p class="text-sm text-slate-300 leading-relaxed" x-text="typeof eval_ === 'string' ? eval_ : eval_.summary"></p>
+                <template x-if="typeof eval_ === 'object' && eval_ !== null">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <template x-for="[key, val] in Object.entries(eval_).filter(([k]) => k !== 'summary')" :key="key">
+                      <div class="bg-slate-900 rounded-lg p-3">
+                        <div class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1" x-text="key.replace(/_/g, ' ')"></div>
+                        <div class="text-sm text-slate-300" x-text="val"></div>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- Raw analysis fallback -->
+      <template x-if="analysis && (analysis.raw || analysis.error)">
+        <div class="bg-card rounded-2xl border border-border p-5 result-card">
+          <h2 class="font-semibold text-sm text-slate-200 mb-3">Qualitative Analysis</h2>
+          <pre class="text-sm text-slate-400 whitespace-pre-wrap leading-relaxed" x-text="analysis.raw || analysis.error"></pre>
+        </div>
+      </template>
+
+    </main>
+  </div>
+
+  <script>
+    function app() {
+      return {
+        audioFile: null,
+        reference: '',
+        selectedModels: ['gemini'],
+        dragging: false,
+        running: false,
+        statusMessage: '',
+        results: {},
+        analysis: null,
+        errors: [],
+
+        models: [
+          { id: 'gemini',   name: 'Gemini 2.0 Flash', desc: 'Google — supports Armenian, Russian, English' },
+          { id: 'wavam',    name: 'wav.am',            desc: 'Armenian speech recognition' },
+          { id: 'hispeech', name: 'HiSpeech',          desc: 'Armenian ASR service' },
+        ],
+
+        get canRun() {
+          return this.audioFile && this.reference.trim().length > 0 && this.selectedModels.length > 0;
+        },
+
+        handleDrop(e) {
+          this.dragging = false;
+          const file = e.dataTransfer.files[0];
+          if (file) this.audioFile = file;
+        },
+
+        handleFileInput(e) {
+          this.audioFile = e.target.files[0] || null;
+        },
+
+        formatSize(bytes) {
+          if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+          return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        },
+
+        wordCount(text) {
+          return text.trim() ? text.trim().split(/\s+/).length : 0;
+        },
+
+        accuracyColor(acc) {
+          if (acc == null) return 'text-slate-400';
+          if (acc >= 90) return 'text-emerald-400';
+          if (acc >= 70) return 'text-yellow-400';
+          return 'text-red-400';
+        },
+
+        sortedResults() {
+          return Object.entries(this.results).sort(([, a], [, b]) =>
+            b.comparison.accuracy - a.comparison.accuracy
+          );
+        },
+
+        async run() {
+          if (!this.canRun) return;
+          this.running = true;
+          this.results = {};
+          this.analysis = null;
+          this.errors = [];
+          this.statusMessage = 'Uploading…';
+
+          const form = new FormData();
+          form.append('audio', this.audioFile);
+          form.append('reference', this.reference);
+          form.append('models', this.selectedModels.join(','));
+
+          try {
+            const response = await fetch('/api/transcribe', { method: 'POST', body: form });
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop();
+
+              for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                  this.handleEvent(JSON.parse(line.slice(6)));
+                } catch (_) {}
+              }
+            }
+          } catch (err) {
+            this.errors.push('Connection error: ' + err.message);
+          } finally {
+            this.running = false;
+            this.statusMessage = '';
+          }
+        },
+
+        handleEvent(event) {
+          if (event.type === 'progress') {
+            this.statusMessage = event.message || event.model || 'Working…';
+          } else if (event.type === 'result') {
+            this.results[event.model] = event.data;
+          } else if (event.type === 'analysis') {
+            this.analysis = event.data;
+          } else if (event.type === 'error') {
+            this.errors.push(`${event.model || 'Error'}: ${event.message}`);
+          } else if (event.type === 'done') {
+            this.running = false;
+            this.statusMessage = '';
+          }
+        },
+
+        exportCSV() {
+          const rows = [['Model', 'Accuracy %', 'WER %', 'CER %', 'Latency (s)', 'Est. Cost ($)', 'Text']];
+          for (const [name, data] of Object.entries(this.results)) {
+            rows.push([
+              name,
+              data.comparison.accuracy,
+              data.comparison.wer,
+              data.comparison.cer,
+              data.latency,
+              data.cost,
+              '"' + data.text.replace(/"/g, '""') + '"',
+            ]);
+          }
+          const csv = rows.map(r => r.join(',')).join('\n');
+          const a = document.createElement('a');
+          a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+          a.download = 'transcription_benchmark.csv';
+          a.click();
+        },
+      };
+    }
+  </script>
+</body>
+</html>
