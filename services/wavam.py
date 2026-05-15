@@ -31,6 +31,9 @@ async def transcribe(audio_bytes: bytes, filename: str) -> dict:
 
     latency = time.time() - start
 
+    if isinstance(data, list):
+        data = data[0] if data else {}
+
     return {
         "text": data.get("text", "").strip(),
         "latency": round(latency, 2),
