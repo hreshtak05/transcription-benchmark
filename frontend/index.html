@@ -16,6 +16,7 @@
     .w-del { background: #7f1d1d33; color: #fca5a5; text-decoration: line-through; padding: 1px 3px; border-radius: 3px; }
     .w-sub { background: #78350f33; color: #fcd34d; padding: 1px 3px; border-radius: 3px; cursor: help; border-bottom: 1px dashed #fcd34d; }
     .w-ins { background: #14532d33; color: #86efac; padding: 1px 3px; border-radius: 3px; }
+    .timestamp { color: #818cf8; font-weight: 600; font-size: 0.75em; background: #1e1b4b55; padding: 1px 4px; border-radius: 3px; margin-right: 2px; }
 
     .drop-active { border-color: #6366f1 !important; background: #1e1b4b22; }
     [x-cloak] { display: none !important; }
@@ -258,20 +259,26 @@
               </div>
             </div>
 
-            <!-- Transcription output -->
-            <div>
-              <h4 class="text-xs font-medium text-slate-500 uppercase tracking-widest mb-2">Model Output</h4>
-              <div class="bg-slate-900 rounded-xl p-4 text-sm text-slate-300 leading-relaxed mono" x-text="data.text || '(empty)'"></div>
+            <!-- Side-by-side: Reference vs Model Output -->
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <h4 class="text-xs font-medium text-slate-500 uppercase tracking-widest mb-2">Reference <span class="text-indigo-400 normal-case">(human)</span></h4>
+                <div class="bg-slate-900 rounded-xl p-4 text-sm text-slate-300 leading-7 mono h-64 overflow-y-auto" x-html="data.comparison.reference_html"></div>
+              </div>
+              <div>
+                <h4 class="text-xs font-medium text-slate-500 uppercase tracking-widest mb-2">Model Output <span class="text-emerald-400 normal-case" x-text="'(' + data.model + ')'"></span></h4>
+                <div class="bg-slate-900 rounded-xl p-4 text-sm text-slate-300 leading-7 mono h-64 overflow-y-auto" x-text="data.text || '(empty)'"></div>
+              </div>
             </div>
 
             <!-- Diff view -->
             <div>
               <div class="flex items-center justify-between mb-2">
-                <h4 class="text-xs font-medium text-slate-500 uppercase tracking-widest">Word Diff vs Reference</h4>
+                <h4 class="text-xs font-medium text-slate-500 uppercase tracking-widest">Word Diff</h4>
                 <div class="flex items-center gap-3 text-xs text-slate-600">
                   <span><span class="inline-block w-2 h-2 rounded-sm bg-red-900 mr-1"></span>Missed</span>
-                  <span><span class="inline-block w-2 h-2 rounded-sm bg-yellow-900 mr-1"></span>Wrong (hover)</span>
-                  <span><span class="inline-block w-2 h-2 rounded-sm bg-green-900 mr-1"></span>Added</span>
+                  <span><span class="inline-block w-2 h-2 rounded-sm bg-yellow-900 mr-1"></span>Wrong (hover to see what model said)</span>
+                  <span><span class="inline-block w-2 h-2 rounded-sm bg-green-900 mr-1"></span>Added by model</span>
                 </div>
               </div>
               <div class="bg-slate-900 rounded-xl p-4 text-sm leading-7 mono" x-html="data.comparison.diff_html"></div>
@@ -333,7 +340,7 @@
         errors: [],
 
         models: [
-          { id: 'gemini',   name: 'Gemini 3 Pro', desc: 'Google — supports Armenian, Russian, English' },
+          { id: 'gemini',   name: 'Gemini 2.5 Pro', desc: 'Google — supports Armenian, Russian, English' },
           { id: 'wavam',    name: 'wav.am',            desc: 'Armenian speech recognition' },
           { id: 'hispeech', name: 'HiSpeech',          desc: 'Armenian ASR service' },
         ],

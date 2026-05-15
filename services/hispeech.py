@@ -24,8 +24,10 @@ async def transcribe(audio_bytes: bytes, filename: str) -> dict:
         response.raise_for_status()
         data = response.json()
 
-    if str(data.get("success")) != "true":
-        raise ValueError(f"HiSpeech error: {data.get('error', 'unknown error')}")
+    success = data.get("success")
+    if str(success).lower() not in ("true", "1"):
+        error_val = data.get("error")
+        raise ValueError(f"HiSpeech error: {data} — raw error: {error_val}")
 
     latency = time.time() - start
     text = data.get("transcription", "")

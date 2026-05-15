@@ -67,14 +67,14 @@ async def transcribe_endpoint(
             event = await coro
             yield {"data": json.dumps(event)}
 
-        # Qualitative LLM analysis after all models finish
+        # Qualitative LLM analysis — optional, won't block results if it fails
         if results:
             yield {"data": json.dumps({"type": "progress", "message": "Running qualitative analysis with Gemini..."})}
             try:
                 analysis = await llm_judge(reference, results)
                 yield {"data": json.dumps({"type": "analysis", "data": analysis})}
             except Exception as e:
-                yield {"data": json.dumps({"type": "error", "model": "judge", "message": str(e)})}
+                yield {"data": json.dumps({"type": "analysis", "data": {"error": f"Qualitative analysis unavailable: {str(e)}"}})}
 
         yield {"data": json.dumps({"type": "done"})}
 

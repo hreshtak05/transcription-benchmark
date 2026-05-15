@@ -6,8 +6,16 @@ import asyncio
 import google.generativeai as genai
 from jiwer import wer, cer
 
+# Matches [05:47], [5:47], [1:05:47] style timestamps
+TIMESTAMP_RE = re.compile(r'\[\d{1,2}:\d{2}(?::\d{2})?\]')
+
+
+def strip_timestamps(text: str) -> str:
+    return TIMESTAMP_RE.sub('', text)
+
 
 def normalize(text: str) -> str:
+    text = strip_timestamps(text)
     text = text.lower()
     text = re.sub(r'[^\w\s]', '', text, flags=re.UNICODE)
     return re.sub(r'\s+', ' ', text).strip()
@@ -40,6 +48,15 @@ def word_diff_html(reference: str, hypothesis: str) -> str:
     return " ".join(parts)
 
 
+def format_reference_html(reference: str) -> str:
+    """Highlight timestamps in reference so speakers are visually distinct."""
+    def replace_ts(m):
+        return f'<span class="timestamp">{m.group()}</span>'
+    escaped = reference.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    return TIMESTAMP_RE.sub(lambda m: f'<span class="timestamp">{m.group()}</span>',
+                            escaped)
+
+
 def compare(reference: str, hypothesis: str) -> dict:
     ref_n = normalize(reference)
     hyp_n = normalize(hypothesis)
@@ -47,9 +64,7 @@ def compare(reference: str, hypothesis: str) -> dict:
     word_error = wer(ref_n, hyp_n)
     char_error = cer(ref_n, hyp_n)
     accuracy = max(0.0, 1.0 - word_error)
-
-    ref_words = ref_n.split()
-    word_count = len(ref_words)
+    word_count = len(ref_n.split())
 
     return {
         "wer": round(word_error * 100, 2),
@@ -57,6 +72,7 @@ def compare(reference: str, hypothesis: str) -> dict:
         "accuracy": round(accuracy * 100, 2),
         "word_count": word_count,
         "diff_html": word_diff_html(reference, hypothesis),
+        "reference_html": format_reference_html(reference),
     }
 
 
@@ -73,7 +89,7 @@ async def llm_judge(reference: str, results: dict) -> dict:
 
     prompt = f"""You are evaluating AI transcription models on audio that may contain Armenian, Russian, and English speech.
 
-Reference (human-verified) transcription:
+Reference (human-verified) transcription (may include timestamps like [05:47] and speaker turns):
 {reference}
 
 AI model outputs:
@@ -92,11 +108,10 @@ For EACH model, evaluate on these dimensions and return a JSON object:
 
 Return ONLY valid JSON, no markdown, no extra text."""
 
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-2.5-pro")
     response = await model.generate_content_async(prompt)
     text = response.text.strip()
 
-    # Strip possible markdown code fences
     text = re.sub(r'^```(?:json)?\s*', '', text)
     text = re.sub(r'\s*```$', '', text)
 
