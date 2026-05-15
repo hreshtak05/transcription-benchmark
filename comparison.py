@@ -108,7 +108,7 @@ For EACH model, evaluate on these dimensions and return a JSON object:
 
 Return ONLY valid JSON, no markdown, no extra text."""
 
-    model = genai.GenerativeModel("gemini-2.5-pro")
+    model = genai.GenerativeModel("gemini-3-flash-preview")
     response = await model.generate_content_async(prompt)
     text = response.text.strip()
 
