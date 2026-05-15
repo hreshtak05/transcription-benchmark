@@ -47,7 +47,7 @@ async def transcribe(audio_bytes: bytes, filename: str) -> dict:
         if gemini_file.state.name == "FAILED":
             raise ValueError("Gemini could not process this audio file")
 
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-3-pro")
         response = await model.generate_content_async([
             gemini_file,
             "Transcribe this audio file accurately. Return ONLY the transcription text — no headers, no commentary, no timestamps.",
@@ -62,7 +62,7 @@ async def transcribe(audio_bytes: bytes, filename: str) -> dict:
             "latency": round(latency, 2),
             "cost": round(cost, 6),
             "duration_seconds": round(duration, 1),
-            "model": "gemini-2.0-flash",
+            "model": "gemini-3-pro",
         }
 
     finally:
