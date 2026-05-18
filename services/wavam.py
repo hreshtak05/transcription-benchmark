@@ -7,22 +7,19 @@ import random
 import string
 import asyncio
 import numpy as np
+import librosa
 import httpx
-from pydub import AudioSegment
 
-STREAM_URL  = "http://wav.am:21478/transcribe_stream/"
+STREAM_URL    = "http://wav.am:21478/transcribe_stream/"
 PUNCTUATE_URL = "http://wav.am:21478/punctuate/"
-CHUNK_SAMPLES = 17792   # ~1.112 seconds at 16 kHz
+CHUNK_SAMPLES = 17792
 TARGET_SR     = 16000
 
 
 def _load_chunks(audio_bytes: bytes, filename: str) -> list:
-    fmt = filename.rsplit(".", 1)[-1].lower() if "." in filename else "mp3"
-    audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=fmt)
-    audio = audio.set_frame_rate(TARGET_SR).set_channels(1).set_sample_width(2)
-    samples = np.array(audio.get_array_of_samples(), dtype=np.float32) / 32768.0
-    return [samples[i: i + CHUNK_SAMPLES].tolist()
-            for i in range(0, len(samples), CHUNK_SAMPLES)]
+    y, _ = librosa.load(io.BytesIO(audio_bytes), sr=TARGET_SR, mono=True)
+    return [y[i: i + CHUNK_SAMPLES].tolist()
+            for i in range(0, len(y), CHUNK_SAMPLES)]
 
 
 def _to_base64(floats: list) -> str:

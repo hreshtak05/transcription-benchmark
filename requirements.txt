@@ -9,4 +9,4 @@ sse-starlette
 mutagen
 aiofiles
 numpy
-pydub
+librosa
